@@ -16,6 +16,7 @@ import (
 func init() {
 	pflag.StringSliceP("address", "a", []string{}, "add an address")
 	pflag.StringP("domain", "d", "", "domain name")
+	pflag.IntP("port", "p", 53, "port")
 
 	viper.BindPFlags(pflag.CommandLine)
 
@@ -52,7 +53,7 @@ func launch() error {
 		}
 	}
 
-	server := &dns.Server{Addr: ":53", Net: "udp"}
+	server := &dns.Server{Addr: fmt.Sprintf(":%d", viper.GetInt("port")), Net: "udp"}
 	dns.HandleFunc(".", handleRequest)
 
 	go server.ListenAndServe()
