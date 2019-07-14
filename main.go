@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/miekg/dns"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -62,44 +63,49 @@ func launch() error {
 }
 
 func handleRequest(w dns.ResponseWriter, r *dns.Msg) {
-	log.Info("salut")
+	log.Debug("handling request")
 
-	msg := new(dns.Msg)
-	msg.SetReply(r)
-	msg.Compress = false
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Compress = false
 
-	switch r.Question[0].Qtype {
-	case dns.TypeA:
-		log.Info("hoho")
+	switch r.Opcode {
+	case dns.OpcodeQuery:
+		parseQuery(m)
+	}
 
-		msg.Authoritative = true
+	w.WriteMsg(m)
+}
 
-		for _, address := range validAddresses {
-			if address.To4() != nil {
-				msg.Answer = append(msg.Answer, &dns.A{
-					Hdr: dns.RR_Header{Name: viper.GetString("domain"), Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
-					A:   net.ParseIP(address.String()),
-				})
+func parseQuery(m *dns.Msg) {
+	log.Debug("parsing query")
 
-				log.Info("woaw")
+	for _, q := range m.Question {
+		switch q.Qtype {
+		case dns.TypeA:
+			log.Debug("A")
+
+			for _, address := range validAddresses {
+				if address.To4() != nil {
+					rr, err := dns.NewRR(fmt.Sprintf("%s A %s", viper.GetString("domain"), address.String()))
+					if err == nil {
+						m.Answer = append(m.Answer, rr)
+					}
+				}
 			}
-		}
-	case dns.TypeAAAA:
-		log.Info("huhu")
+		case dns.TypeAAAA:
+			log.Debug("AAAA")
 
-		msg.Authoritative = true
-
-		for _, address := range validAddresses {
-			if address.To4() == nil {
-				msg.Answer = append(msg.Answer, &dns.A{
-					Hdr: dns.RR_Header{Name: viper.GetString("domain"), Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
-					A:   net.ParseIP(address.String()),
-				})
+			for _, address := range validAddresses {
+				if address.To4() == nil {
+					rr, err := dns.NewRR(fmt.Sprintf("%s AAAA %s", viper.GetString("domain"), address.String()))
+					if err == nil {
+						m.Answer = append(m.Answer, rr)
+					}
+				}
 			}
 		}
 	}
-
-	w.WriteMsg(msg)
 }
 
 func main() {
